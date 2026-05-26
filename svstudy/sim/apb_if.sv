@@ -52,3 +52,36 @@
 // Notes:
 //   This is APB-like for practice. It does not need to cover every APB spec detail.
 //
+interface apb_if #(parameter int ADDR_WIDTH = 16, parameter int DATA_WIDTH = 32);
+    logic psel;
+    logic penable;
+    logic pwrite;
+    logic [ADDR_WIDTH-1 :0] paddr;
+    logic [DATA_WIDTH-1 :0] pwdata;
+    logic [DATA_WIDTH-1 :0] prdata;
+    logic pready;
+    logic pslverr;
+
+    modport master (
+        output psel,
+        output penable,
+        output pwrite,
+        output paddr,
+        output pwdata,
+        input  prdata,
+        input  pready,
+        input  pslverr
+    );
+    
+    modport slave (
+        input  psel,
+        input  penable,
+        input  pwrite,
+        input  paddr,
+        input  pwdata,
+        output prdata,
+        output pready,
+        output pslverr
+    );
+
+endinterface //apb_if

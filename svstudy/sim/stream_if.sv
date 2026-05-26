@@ -34,3 +34,22 @@
 //   interface defines a bundle of related signals.
 //   modport defines the direction of those signals from a module's view.
 //
+interface stream_if #(parameter int DATA_WIDTH = 32);
+    logic [DATA_WIDTH-1 :0] data;
+    logic valid;
+    logic ready;
+
+modport master (
+    output data,
+    output valid,
+    input ready
+);
+
+modport slave (
+    input data,
+    input valid,
+    output ready
+);
+
+
+endinterface
