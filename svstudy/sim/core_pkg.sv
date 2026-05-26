@@ -60,3 +60,44 @@
 // Notes:
 //   Put shared types here instead of redefining them in every module.
 //
+
+package core_pkg;
+
+typedef enum logic[3:0] {
+    ALU_ADD,
+    ALU_SUB,
+    ALU_AND,
+    ALU_OR,
+    ALU_XOR,
+    ALU_SLL,
+    ALU_SRL,
+    ALU_SRA,
+    ALU_SLT,
+    ALU_SLTU
+} alu_op_t;
+
+typedef struct packed {
+    logic [31:0] src0;
+    logic [31:0] src1;
+    alu_op_t     op;
+} alu_req_t;
+
+typedef struct packed {
+    logic [31:0] result;
+    logic        zero;
+} alu_rsp_t;
+
+typedef struct packed {
+    logic        reg_write;
+    logic        mem_read;
+    logic        mem_write;
+    logic        branch;
+    logic        jump;
+    alu_op_t     alu_op;
+    logic [4:0]  rs1;
+    logic [4:0]  rs2;
+    logic [4:0]  rd;
+    logic [31:0] imm;
+} decode_t;
+
+endpackage

@@ -41,3 +41,69 @@
 // Notes:
 //   For signed compare or arithmetic shift, use signed casting carefully.
 //
+// ============================================================
+// File: alu.v
+// Topic: package / enum / struct / unique case practice
+// ============================================================
+
+import core_pkg::*;
+
+module alu (
+    input  core_pkg::alu_req_t req,
+    output core_pkg::alu_rsp_t rsp
+);
+
+always_comb begin
+    rsp.result = 32'b0;
+    rsp.zero   = 1'b0;
+
+    unique case (req.op)
+        ALU_ADD: begin
+            rsp.result = req.src0 + req.src1;
+        end
+
+        ALU_SUB: begin
+            rsp.result = req.src0 - req.src1;
+        end
+
+        ALU_AND: begin
+            rsp.result = req.src0 & req.src1;
+        end
+
+        ALU_OR: begin
+            rsp.result = req.src0 | req.src1;
+        end
+
+        ALU_XOR: begin
+            rsp.result = req.src0 ^ req.src1;
+        end
+
+        ALU_SLL: begin
+            rsp.result = req.src0 << req.src1[4:0];
+        end
+
+        ALU_SRL: begin
+            rsp.result = req.src0 >> req.src1[4:0];
+        end
+
+        ALU_SRA: begin
+            rsp.result = $signed(req.src0) >>> req.src1[4:0];
+        end
+
+        ALU_SLT: begin
+            rsp.result = ($signed(req.src0) < $signed(req.src1)) ? 32'd1 : 32'd0;
+        end
+
+        ALU_SLTU: begin
+            rsp.result = (req.src0 < req.src1) ? 32'd1 : 32'd0;
+        end
+
+        default: begin
+            rsp.result = 32'b0;
+        end
+    endcase
+
+    rsp.zero = (rsp.result == 32'b0);
+end
+
+endmodule
