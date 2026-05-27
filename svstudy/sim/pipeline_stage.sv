@@ -43,3 +43,47 @@
 //   1. If out.valid && !out.ready, out.valid should remain high next cycle.
 //   2. If out.valid && !out.ready, out.data should remain stable next cycle.
 //
+module pipeline_stage #(
+    parameter int DATA_WIDTH = 32
+) (
+    input logic clk,
+    input logic rst_n,
+    stream_if.slave in,
+    stream_if.master out
+);
+
+logic full;
+logic [DATA_WIDTH-1:0] data_q;
+
+logic in_fire;
+logic out_fire;
+
+assign in_fire = in.valid && in.ready;
+assign out_fire = out.valid && out.ready;
+
+
+assign in.ready = !full || out.ready;
+assign out.valid = full;
+assign out.data = data_q;
+
+always_ff @( posedge clk or negedge rst_n ) begin
+    if(~rst_n) begin
+        full <= 1'b0;
+        data_q <= 'b0;
+    end else begin
+        if(in_fire) begin
+            data_q <= in.data;
+        end
+
+        case ({in_fire,out_fire})
+            2'b10: full <= 1'b1; // only input
+            2'b01: full <= 1'b0; // only output
+            2'b11: full <= 1'b1; // output old data, accept new data
+            default: full <= full;
+        endcase
+    end
+end
+
+
+
+endmodule

@@ -8,3 +8,80 @@ z2
 !i10f 100
 cModel Technology
 dD:/sim/DDR3test
+T_opt
+!s110 1779867396
+V=1ANfn;3V2nn_3:9cBgzZ0
+04 17 4 work tb_pipeline_stage fast 0
+=1-a0ad9f0bc24c-6a169f04-2c6-405c8
+o-quiet -auto_acc_if_foreign -work work +acc
+n@_opt
+OL;O;10.4;61
+vpipeline_stage
+Z0 DXx6 sv_std 3 std 0 22 WmjPaeP=7F5?QFXzJ>D[Q2
+!s110 1779867387
+!i10b 1
+!s100 FUb6=G@PiLBTkh:CB0h[g3
+Ig7zEIhJ<lnhPN`ob[cGYN0
+Z1 VDg1SIo80bB@j0V0VzS_@n1
+!s105 pipeline_stage_sv_unit
+S1
+Z2 dE:/study/svstudy/sim
+w1779867296
+8E:/study/svstudy/sim/pipeline_stage.sv
+FE:/study/svstudy/sim/pipeline_stage.sv
+L0 46
+Z3 OL;L;10.4;61
+r1
+!s85 0
+31
+!s108 1779867387.846000
+!s107 E:/study/svstudy/sim/pipeline_stage.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|E:/study/svstudy/sim/pipeline_stage.sv|
+!i113 0
+Z4 o-work work -sv -L mtiAvm -L mtiRnm -L mtiOvm -L mtiUvm -L mtiUPF -L infact
+Ystream_if
+R0
+!s110 1779867383
+!i10b 1
+!s100 IE4?9:=Z9eMPKH1kA0]z:0
+I3[Smf=c0`3?U^Lf?bcjZ`2
+R1
+!s105 stream_if_sv_unit
+S1
+R2
+w1779807888
+8E:/study/svstudy/sim/stream_if.sv
+FE:/study/svstudy/sim/stream_if.sv
+L0 37
+R3
+r1
+!s85 0
+31
+!s108 1779867382.966000
+!s107 E:/study/svstudy/sim/stream_if.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|E:/study/svstudy/sim/stream_if.sv|
+!i113 0
+R4
+vtb_pipeline_stage
+R0
+!s110 1779867390
+!i10b 1
+!s100 TY@SfOJ:C8C7:A_T>lf==0
+IJ?e70D;ZC9UdKCF]>R0[70
+R1
+!s105 tb_pipeline_stage_sv_unit
+S1
+R2
+w1779867233
+8E:/study/svstudy/sim/tb_pipeline_stage.sv
+FE:/study/svstudy/sim/tb_pipeline_stage.sv
+L0 3
+R3
+r1
+!s85 0
+31
+!s108 1779867390.333000
+!s107 E:/study/svstudy/sim/tb_pipeline_stage.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|E:/study/svstudy/sim/tb_pipeline_stage.sv|
+!i113 0
+R4
