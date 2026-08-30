@@ -41,23 +41,27 @@ module PF_CTRL (
     // One RF-response holding entry
     // ------------------------------------------------------------------
 
-    reg  ram_rd_pending;
+    reg  ram_rd_pending; //ram_rd_data has a valid data
     reg  ram_rd_qos_pending;
     wire response_push;
     wire response_slot_available;
 
-    // A pending response may be replaced by a new response in the same cycle
-    // in which the old one enters the explicit FIFO.
+/*
+response_slot = {
+    ram_rd_pending,
+    ram_rd_qos_pending,
+    ram_rd_data[8:0]
+};
+*/
+
     assign response_slot_available = !ram_rd_pending || response_push;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            ram_rd_pending     <= 1'b0;
-            ram_rd_qos_pending <= 1'b0;
+            ram_rd_pending <= 1'b0;
         end
         else if (ptr_reset) begin
-            ram_rd_pending     <= 1'b0;
-            ram_rd_qos_pending <= 1'b0;
+            ram_rd_pending <= 1'b0;
         end
         else begin
             case ({ram_rd_en, response_push})
@@ -66,9 +70,18 @@ module PF_CTRL (
                 2'b01:   ram_rd_pending <= 1'b0;
                 default: ram_rd_pending <= ram_rd_pending;
             endcase
+        end
+    end
 
-            if (ram_rd_en)
-                ram_rd_qos_pending <= fetch_qos;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ram_rd_qos_pending <= 1'b0;
+        end
+        else if (ptr_reset) begin
+            ram_rd_qos_pending <= 1'b0;
+        end
+        else if (ram_rd_en) begin
+            ram_rd_qos_pending <= fetch_qos; //ram read delay one beat
         end
     end
 
@@ -80,7 +93,7 @@ module PF_CTRL (
 
     reg [1:0] fifo_wr_ptr;
     reg [1:0] fifo_rd_ptr;
-    reg [2:0] fifo_count;
+    reg [1:0] fifo_count;
 
     wire [1:0] fifo_wr_ptr_inc;
     wire [1:0] fifo_rd_ptr_inc;
@@ -95,10 +108,8 @@ module PF_CTRL (
     assign fifo_rd_ptr_inc = (fifo_rd_ptr == 2'd2) ?
                              2'd0 : fifo_rd_ptr + 2'd1;
 
-    assign fifo_empty = (fifo_count == 3'd0);
+    assign fifo_empty = (fifo_count == 2'd0);
 
-    // Explicit three-way selection avoids an out-of-range array index while
-    // fifo_rd_ptr is still unknown at time zero before reset takes effect.
     always @(*) begin
         case (fifo_rd_ptr)
             2'd0:    fifo_head_data = data_fifo[0];
@@ -113,7 +124,9 @@ module PF_CTRL (
     // ------------------------------------------------------------------
 
     reg  [1:0] fetch_info_pos;
-    reg  [2:0] assembling_id;
+    // Only the first two destination bits need storage.  The third bit is
+    // consumed directly from the current RF response.
+    reg  [1:0] assembling_id;
     reg        fetch_packet_active;
     reg        fetch_qos_lock;
 
@@ -130,7 +143,7 @@ module PF_CTRL (
                           ram_rd_data[8];
     assign response_id_complete = response_push &&
                                   (fetch_info_pos == INFO_ID0);
-    assign completed_id = {assembling_id[2:1], ram_rd_data[8]};
+    assign completed_id = {assembling_id, ram_rd_data[8]};
     assign completed_qos = ram_rd_qos_pending;
 
     // QoS is chosen only at a packet boundary.  Once a low-QoS packet has
@@ -167,16 +180,13 @@ module PF_CTRL (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             fetch_packet_active <= 1'b0;
-            fetch_qos_lock      <= 1'b0;
         end
         else if (ptr_reset) begin
             fetch_packet_active <= 1'b0;
-            fetch_qos_lock      <= 1'b0;
         end
         else if (response_eop) begin
             if (ram_rd_en) begin
                 fetch_packet_active <= 1'b1;
-                fetch_qos_lock      <= fetch_qos;
             end
             else begin
                 fetch_packet_active <= 1'b0;
@@ -184,6 +194,22 @@ module PF_CTRL (
         end
         else if (!fetch_packet_active && ram_rd_en) begin
             fetch_packet_active <= 1'b1;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            fetch_qos_lock <= 1'b0;
+        end
+        else if (ptr_reset) begin
+            fetch_qos_lock <= 1'b0;
+        end
+        else if (response_eop) begin
+            if (ram_rd_en) begin
+                fetch_qos_lock <= fetch_qos;
+            end
+        end
+        else if (!fetch_packet_active && ram_rd_en) begin
             fetch_qos_lock      <= fetch_qos;
         end
     end
@@ -191,32 +217,51 @@ module PF_CTRL (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             fetch_info_pos <= INFO_ID2;
-            assembling_id  <= 3'd0;
         end
         else if (ptr_reset) begin
             fetch_info_pos <= INFO_ID2;
-            assembling_id  <= 3'd0;
         end
         else if (response_push) begin
             case (fetch_info_pos)
                 INFO_ID2: begin
-                    assembling_id[2] <= ram_rd_data[8];
-                    fetch_info_pos    <= INFO_ID1;
+                    fetch_info_pos <= INFO_ID1;
                 end
                 INFO_ID1: begin
-                    assembling_id[1] <= ram_rd_data[8];
-                    fetch_info_pos    <= INFO_ID0;
+                    fetch_info_pos <= INFO_ID0;
                 end
                 INFO_ID0: begin
-                    assembling_id[0] <= ram_rd_data[8];
-                    fetch_info_pos    <= INFO_EOP;
+                    fetch_info_pos <= INFO_EOP;
                 end
                 default: begin
                     if (ram_rd_data[8]) begin
                         fetch_info_pos <= INFO_ID2;
-                        assembling_id  <= 3'd0;
                     end
                 end
+            endcase
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            assembling_id <= 2'd0;
+        end
+        else if (ptr_reset) begin
+            assembling_id <= 2'd0;
+        end
+        else if (response_push) begin
+            case (fetch_info_pos)
+                INFO_ID2: begin
+                    assembling_id[1] <= ram_rd_data[8];
+                end
+                INFO_ID1: begin
+                    assembling_id[0] <= ram_rd_data[8];
+                end
+                INFO_EOP: begin
+                    if (ram_rd_data[8]) begin
+                        assembling_id <= 2'd0;
+                    end
+                end
+                default: assembling_id <= assembling_id;
             endcase
         end
     end
@@ -239,77 +284,104 @@ module PF_CTRL (
 
     assign current_pkt_onehot = 8'b0000_0001 << current_pkt_id;
 
-    // Only the egress owning the current packet may consume the FIFO head.
-    // This also prevents a grant for the next destination from consuming the
-    // current packet's EOP.
     assign current_grant = |(rd_en_from_egress & current_pkt_onehot);
     assign fifo_pop = current_pkt_valid && current_grant && !fifo_empty;
     assign fifo_head_eop = (output_info_pos == INFO_EOP) &&
                            fifo_head_data[8];
     assign fifo_pop_eop = fifo_pop && fifo_head_eop;
 
-    // ready does not depend on the same-cycle grant.  ARB_RR may therefore be
-    // purely combinational without creating ready -> grant -> ready feedback.
+    //avoid comb loop
     assign ready_to_egress = (current_pkt_valid &&
                               (output_info_pos == INFO_ID2)) ?
                              current_pkt_onehot : 8'd0;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            current_pkt_id    <= 3'd0;
-            next_pkt_id       <= 3'd0;
-            current_pkt_qos   <= 1'b0;
-            next_pkt_qos      <= 1'b0;
-            current_pkt_valid <= 1'b0;
-            next_pkt_valid    <= 1'b0;
+            current_pkt_id  <= 3'd0;
+            current_pkt_qos <= 1'b0;
         end
         else if (ptr_reset) begin
-            current_pkt_id    <= 3'd0;
-            next_pkt_id       <= 3'd0;
-            current_pkt_qos   <= 1'b0;
-            next_pkt_qos      <= 1'b0;
-            current_pkt_valid <= 1'b0;
-            next_pkt_valid    <= 1'b0;
+            current_pkt_id  <= 3'd0;
+            current_pkt_qos <= 1'b0;
         end
         else if (fifo_pop_eop) begin
             if (next_pkt_valid) begin
-                current_pkt_id    <= next_pkt_id;
-                current_pkt_qos   <= next_pkt_qos;
-                current_pkt_valid <= 1'b1;
-
-                if (response_id_complete) begin
-                    next_pkt_id    <= completed_id;
-                    next_pkt_qos   <= completed_qos;
-                    next_pkt_valid <= 1'b1;
-                end
-                else begin
-                    next_pkt_valid <= 1'b0;
-                end
+                current_pkt_id  <= next_pkt_id;
+                current_pkt_qos <= next_pkt_qos;
             end
             else if (response_id_complete) begin
-                current_pkt_id    <= completed_id;
-                current_pkt_qos   <= completed_qos;
+                current_pkt_id  <= completed_id;
+                current_pkt_qos <= completed_qos;
+            end
+        end
+        else if (response_id_complete && !current_pkt_valid) begin
+            current_pkt_id  <= completed_id;
+            current_pkt_qos <= completed_qos;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            current_pkt_valid <= 1'b0;
+        end
+        else if (ptr_reset) begin
+            current_pkt_valid <= 1'b0;
+        end
+        else if (fifo_pop_eop) begin
+            if (next_pkt_valid || response_id_complete) begin
                 current_pkt_valid <= 1'b1;
-                next_pkt_valid    <= 1'b0;
             end
             else begin
                 current_pkt_valid <= 1'b0;
-                next_pkt_valid    <= 1'b0;
             end
         end
-        else begin
-            if (response_id_complete) begin
-                if (!current_pkt_valid) begin
-                    current_pkt_id    <= completed_id;
-                    current_pkt_qos   <= completed_qos;
-                    current_pkt_valid <= 1'b1;
-                end
-                else if (!next_pkt_valid) begin
-                    next_pkt_id    <= completed_id;
-                    next_pkt_qos   <= completed_qos;
-                    next_pkt_valid <= 1'b1;
-                end
+        else if (response_id_complete && !current_pkt_valid) begin
+            current_pkt_valid <= 1'b1;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            next_pkt_id  <= 3'd0;
+            next_pkt_qos <= 1'b0;
+        end
+        else if (ptr_reset) begin
+            next_pkt_id  <= 3'd0;
+            next_pkt_qos <= 1'b0;
+        end
+        else if (fifo_pop_eop) begin
+            if (next_pkt_valid && response_id_complete) begin
+                next_pkt_id  <= completed_id;
+                next_pkt_qos <= completed_qos;
             end
+        end
+        else if (response_id_complete &&
+                 current_pkt_valid &&
+                 !next_pkt_valid) begin
+            next_pkt_id  <= completed_id;
+            next_pkt_qos <= completed_qos;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            next_pkt_valid <= 1'b0;
+        end
+        else if (ptr_reset) begin
+            next_pkt_valid <= 1'b0;
+        end
+        else if (fifo_pop_eop) begin
+            if (next_pkt_valid && response_id_complete) begin
+                next_pkt_valid <= 1'b1;
+            end
+            else begin
+                next_pkt_valid <= 1'b0;
+            end
+        end
+        else if (response_id_complete &&
+                 current_pkt_valid &&
+                 !next_pkt_valid) begin
+            next_pkt_valid <= 1'b1;
         end
     end
 
@@ -317,45 +389,71 @@ module PF_CTRL (
     // FIFO update and output
     // ------------------------------------------------------------------
 
-    assign fifo_space_for_response = (fifo_count < 3'd3) || fifo_pop;
+    assign fifo_space_for_response = (fifo_count < 2'd3) || fifo_pop;
     assign response_push = ram_rd_pending && fifo_space_for_response;
+
+    always @(posedge clk) begin
+        if (!ptr_reset && response_push) begin
+            data_fifo[fifo_wr_ptr] <= ram_rd_data;
+        end
+    end
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             fifo_wr_ptr <= 2'd0;
-            fifo_rd_ptr <= 2'd0;
-            fifo_count  <= 3'd0;
-            output_info_pos <= INFO_ID2;
         end
         else if (ptr_reset) begin
             fifo_wr_ptr <= 2'd0;
+        end
+        else if (response_push) begin
+            fifo_wr_ptr <= fifo_wr_ptr_inc;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             fifo_rd_ptr <= 2'd0;
-            fifo_count  <= 3'd0;
+        end
+        else if (ptr_reset) begin
+            fifo_rd_ptr <= 2'd0;
+        end
+        else if (fifo_pop) begin
+            fifo_rd_ptr <= fifo_rd_ptr_inc;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             output_info_pos <= INFO_ID2;
         end
-        else begin
-            if (response_push) begin
-                data_fifo[fifo_wr_ptr] <= ram_rd_data;
-                fifo_wr_ptr            <= fifo_wr_ptr_inc;
-            end
-
-            if (fifo_pop) begin
-                fifo_rd_ptr <= fifo_rd_ptr_inc;
-
-                case (output_info_pos)
-                    INFO_ID2: output_info_pos <= INFO_ID1;
-                    INFO_ID1: output_info_pos <= INFO_ID0;
-                    INFO_ID0: output_info_pos <= INFO_EOP;
-                    default: begin
-                        if (fifo_head_data[8])
-                            output_info_pos <= INFO_ID2;
+        else if (ptr_reset) begin
+            output_info_pos <= INFO_ID2;
+        end
+        else if (fifo_pop) begin
+            case (output_info_pos)
+                INFO_ID2: output_info_pos <= INFO_ID1;
+                INFO_ID1: output_info_pos <= INFO_ID0;
+                INFO_ID0: output_info_pos <= INFO_EOP;
+                default: begin
+                    if (fifo_head_data[8]) begin
+                        output_info_pos <= INFO_ID2;
                     end
-                endcase
-            end
+                end
+            endcase
+        end
+    end
 
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            fifo_count <= 2'd0;
+        end
+        else if (ptr_reset) begin
+            fifo_count <= 2'd0;
+        end
+        else begin
             case ({response_push, fifo_pop})
-                2'b10:   fifo_count <= fifo_count + 3'd1;
-                2'b01:   fifo_count <= fifo_count - 3'd1;
+                2'b10:   fifo_count <= fifo_count + 2'd1;
+                2'b01:   fifo_count <= fifo_count - 2'd1;
                 default: fifo_count <= fifo_count;
             endcase
         end
