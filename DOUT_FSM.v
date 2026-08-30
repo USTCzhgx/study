@@ -163,13 +163,11 @@ module DOUT_FSM (
     always @(posedge i_clk or negedge i_rst_n) begin
         if (!i_rst_n) begin
             dout_state <= DOUT_IDLE;
-            active_id  <= 3'd0;
         end
         else begin
             case (dout_state)
                 DOUT_IDLE: begin
                     if (i_grant_vld && selected_vld) begin
-                        active_id <= grant_id;
                         if (!selected_eop)
                             dout_state <= DOUT_SEND;
                     end
@@ -182,7 +180,28 @@ module DOUT_FSM (
 
                 default: begin
                     dout_state <= DOUT_IDLE;
-                    active_id  <= 3'd0;
+                end
+            endcase
+        end
+    end
+
+    always @(posedge i_clk or negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            active_id <= 3'd0;
+        end
+        else begin
+            case (dout_state)
+                DOUT_IDLE: begin
+                    if (i_grant_vld && selected_vld)
+                        active_id <= grant_id;
+                end
+
+                DOUT_SEND: begin
+                    active_id <= active_id;
+                end
+
+                default: begin
+                    active_id <= 3'd0;
                 end
             endcase
         end
