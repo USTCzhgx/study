@@ -35,6 +35,7 @@ module PKT_INGRESS (
 
     wire wr_en;
     wire pkt_commit;
+    wire wr_packet_active;
 
     DIN_FLT u_din_flt (
         .clk        (clk),
@@ -43,27 +44,9 @@ module PKT_INGRESS (
         .din_eop    (din_eop),
         .wr_en      (wr_en),
         .pkt_commit (pkt_commit),
-        .pkt_error  (pkt_error)
+        .pkt_error  (pkt_error),
+        .packet_active (wr_packet_active)
     );
-
-    reg wr_packet_active;
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            wr_packet_active <= 1'b0;
-        end
-        else if (pkt_error) begin
-            // A repeated SOP aborts the old packet and starts a new one on
-            // the same beat. Other errors leave no active packet.
-            wr_packet_active <= wr_en;
-        end
-        else if (pkt_commit && wr_en) begin
-            wr_packet_active <= 1'b0;
-        end
-        else if (wr_en) begin
-            wr_packet_active <= 1'b1;
-        end
-    end
 
     // ------------------------------------------------------------------
     // Shared status and pointer signals
@@ -131,11 +114,6 @@ module PKT_INGRESS (
         else if (!window_active && wr_en) begin
             window_base   <= global_timestamp;
             window_active <= 1'b1;
-        end
-        else if (jump_pulse) begin
-            // Equal to the stored value on a normal modulo-8192 tick. This
-            // assignment also makes the intended epoch explicit.
-            window_base <= global_timestamp;
         end
     end
 
@@ -222,7 +200,7 @@ module PKT_INGRESS (
 
     wire [9:0] mem_wr_addr;
     reg  [1:0] wr_info_pos;
-    reg  [2:0] wr_packet_id;
+    reg  [1:0] wr_packet_id;
     reg        mem_wr_info;
     wire [8:0] mem_wr_data;
 
@@ -246,30 +224,35 @@ module PKT_INGRESS (
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            wr_info_pos  <= INFO_ID2;
-            wr_packet_id <= 3'd0;
+            wr_packet_id <= 2'd0;
         end
         else if (ptr_reset) begin
-            wr_info_pos  <= INFO_ID2;
-            wr_packet_id <= 3'd0;
+            wr_packet_id <= 2'd0;
         end
-        else begin
-            if (wr_en && din_sop)
-                wr_packet_id <= din_id;
+        else if (wr_en && din_sop) begin
+            wr_packet_id <= din_id[1:0];
+        end
+    end
 
-            if (pkt_error) begin
-                wr_info_pos <= wr_en ? INFO_ID1 : INFO_ID2;
-            end
-            else if (pkt_commit && wr_en) begin
-                wr_info_pos <= INFO_ID2;
-            end
-            else if (wr_en) begin
-                case (wr_info_pos)
-                    INFO_ID2: wr_info_pos <= INFO_ID1;
-                    INFO_ID1: wr_info_pos <= INFO_ID0;
-                    default:  wr_info_pos <= INFO_EOP;
-                endcase
-            end
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            wr_info_pos <= INFO_ID2;
+        end
+        else if (ptr_reset) begin
+            wr_info_pos <= INFO_ID2;
+        end
+        else if (pkt_error) begin
+            wr_info_pos <= wr_en ? INFO_ID1 : INFO_ID2;
+        end
+        else if (pkt_commit && wr_en) begin
+            wr_info_pos <= INFO_ID2;
+        end
+        else if (wr_en) begin
+            case (wr_info_pos)
+                INFO_ID2: wr_info_pos <= INFO_ID1;
+                INFO_ID1: wr_info_pos <= INFO_ID0;
+                default:  wr_info_pos <= INFO_EOP;
+            endcase
         end
     end
 
